@@ -1,0 +1,23 @@
+[debug] [2026-04-10T16:06:33.527Z] ----------------------------------------------------------------------
+[debug] [2026-04-10T16:06:33.546Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Nisha S\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init firestore
+[debug] [2026-04-10T16:06:33.547Z] CLI Version:   15.14.0
+[debug] [2026-04-10T16:06:33.547Z] Platform:      win32
+[debug] [2026-04-10T16:06:33.547Z] Node Version:  v24.14.1
+[debug] [2026-04-10T16:06:33.548Z] Time:          Fri Apr 10 2026 21:36:33 GMT+0530 (India Standard Time)
+[debug] [2026-04-10T16:06:33.548Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\Users\Nisha S\Downloads\digitalApprovalSystem
+
+Before we get started, keep in mind:
+
+  * You are initializing within an existing Firebase project directory
+

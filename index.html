@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Digital Approval System</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --blue:#2563eb;--blue-dk:#1d4ed8;--blue-lt:#eff6ff;--blue-mid:#dbeafe;
+  --teal:#0891b2;
+  --green:#16a34a;--green-lt:#f0fdf4;--green-mid:#dcfce7;
+  --amber:#d97706;--amber-mid:#fef3c7;
+  --red:#dc2626;--red-lt:#fef2f2;--red-mid:#fee2e2;
+  --ink:#0f172a;--ink2:#1e293b;--ink3:#475569;--ink4:#94a3b8;
+  --surface:#ffffff;--bg:#f0f4ff;
+  --border:#e2e8f0;--border2:#cbd5e1;
+  --r:10px;--rl:16px;--rxl:24px;
+  --sh:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(0,0,0,.06);
+  --sh-lg:0 4px 6px rgba(0,0,0,.05),0 10px 40px rgba(0,0,0,.1);
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse 600px 500px at -5% 10%,rgba(37,99,235,.09) 0%,transparent 70%),
+  radial-gradient(ellipse 500px 400px at 105% 80%,rgba(8,145,178,.08) 0%,transparent 70%);}
+
+/* ── PAGES ── */
+.page{display:none;min-height:100vh;position:relative;z-index:1}
+.page.active{display:block}
+#pg-welcome{display:none;min-height:100vh;align-items:center}
+#pg-welcome.active{display:flex}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);color:#fff;padding:11px 22px;border-radius:999px;font-size:14px;font-weight:500;z-index:9999;opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast.ok{background:#16a34a}#toast.err{background:#dc2626}#toast.info{background:#2563eb}
+
+/* ── LOADER ── */
+#loader{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9998;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px}
+#loader.on{display:flex}
+.spin{width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+.spin-txt{color:#fff;font-size:14px;font-weight:500}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── WELCOME ── */
+.w-wrap{display:grid;grid-template-columns:1fr 1fr;min-height:100vh;width:100%;max-width:1160px;margin:0 auto;align-items:center;padding:60px 44px;gap:60px}
+.w-badge{display:inline-flex;align-items:center;gap:7px;background:var(--blue-mid);color:var(--blue-dk);font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:5px 14px;border-radius:999px;margin-bottom:22px}
+.w-title{font-family:'Playfair Display',serif;font-size:clamp(40px,5vw,66px);line-height:1.07;margin-bottom:18px}
+.w-title em{font-style:normal;color:var(--blue)}
+.w-sub{font-size:16px;color:var(--ink3);line-height:1.8;max-width:420px;margin-bottom:36px}
+.w-stats{display:flex;align-items:center;gap:22px;margin-top:28px}
+.ws{display:flex;flex-direction:column}.ws-n{font-size:22px;font-weight:700;color:var(--blue)}.ws-l{font-size:10px;color:var(--ink3);text-transform:uppercase;letter-spacing:.4px}
+.wd{width:1px;height:30px;background:var(--border2)}
+.w-card{background:var(--surface);border-radius:var(--rxl);padding:32px;box-shadow:var(--sh-lg);border:1px solid var(--border)}
+.w-feat{display:flex;align-items:flex-start;gap:13px;padding:14px;background:var(--bg);border-radius:var(--rl);border:1px solid var(--border);margin-bottom:10px}
+.w-feat:last-child{margin-bottom:0}
+.wfi{font-size:21px;flex-shrink:0}.wft{font-size:13px;font-weight:600;margin-bottom:2px}.wfd{font-size:12px;color:var(--ink3);line-height:1.5}
+
+/* ── SHARED ── */
+.wrap{max-width:660px;margin:0 auto;padding:44px 22px 80px;position:relative;z-index:1}
+.wrap.wide{max-width:860px}
+.back{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);color:var(--ink3);padding:8px 16px;border-radius:var(--r);font-size:13px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer;margin-bottom:26px;transition:all .2s}
+.back:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-lt)}
+.ph{margin-bottom:26px}
+.ph h2{font-family:'Playfair Display',serif;font-size:28px;color:var(--ink);margin-bottom:5px;line-height:1.2}
+.ph p{font-size:14px;color:var(--ink3)}
+
+/* ── ROLE CARDS ── */
+.role-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.rc{background:var(--surface);border:2px solid var(--border);border-radius:var(--rxl);padding:32px 24px;cursor:pointer;transition:all .22s}
+.rc:hover{border-color:var(--blue);transform:translateY(-3px);box-shadow:0 14px 36px rgba(37,99,235,.11)}
+.rc-em{font-size:40px;margin-bottom:14px;display:block}
+.rc-t{font-size:19px;font-weight:700;margin-bottom:7px}
+.rc-d{font-size:13px;color:var(--ink3);line-height:1.6;margin-bottom:18px}
+.rc-go{font-size:13px;font-weight:600;color:var(--blue)}
+
+/* ── FORM CARD ── */
+.fcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--rxl);padding:30px;box-shadow:var(--sh)}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.fg{display:flex;flex-direction:column;gap:6px}
+.fg.full{grid-column:1/-1}
+.fg label{font-size:11px;font-weight:700;color:var(--ink3);letter-spacing:.4px;text-transform:uppercase}
+.fg input,.fg select{padding:11px 13px;font-size:14px;font-family:'Inter',sans-serif;border:1.5px solid var(--border);border-radius:var(--r);background:#fff;color:var(--ink);outline:none;transition:all .2s;width:100%}
+.fg input:focus,.fg select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.fg input::placeholder{color:var(--ink4)}
+.opt{font-size:10px;font-weight:400;color:var(--ink4);text-transform:none;letter-spacing:0}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:999px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-p{background:var(--blue);color:#fff;padding:13px 26px;font-size:14px}
+.btn-p:hover{background:var(--blue-dk);transform:translateY(-1px);box-shadow:0 6px 18px rgba(37,99,235,.3)}
+.btn-o{background:transparent;color:var(--blue);border:1.5px solid var(--blue);padding:12px 22px;font-size:14px}
+.btn-o:hover{background:var(--blue-lt)}
+.btn-g{background:var(--green);color:#fff;padding:13px 26px;font-size:14px}
+.btn-g:hover{background:#15803d}
+.btn-w{width:100%;border-radius:var(--r);padding:14px;font-size:15px;margin-top:14px}
+
+/* ── DASHBOARD ── */
+.d-wrap{max-width:980px;margin:0 auto;padding:32px 22px 80px;position:relative;z-index:1}
+.d-top{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rxl);padding:18px 24px;margin-bottom:22px;box-shadow:var(--sh)}
+.d-av{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--teal));color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;flex-shrink:0}
+.d-info{flex:1}
+.d-gr{font-size:11px;color:var(--ink4)}.d-nm{font-size:19px;font-weight:700;font-family:'Playfair Display',serif}.d-mt{font-size:12px;color:var(--ink3);margin-top:1px}
+.d-time{font-size:12px;color:var(--ink4);text-align:right;line-height:1.6;white-space:nowrap}
+.d-lo{background:var(--bg);border:1px solid var(--border);color:var(--ink3);padding:7px 13px;border-radius:var(--r);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .2s}
+.d-lo:hover{border-color:var(--red);color:var(--red)}
+
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.kpi{background:var(--surface);border-radius:var(--rl);padding:18px 14px;text-align:center;border:1px solid var(--border);border-top:3px solid;box-shadow:var(--sh);transition:transform .2s}
+.kpi:hover{transform:translateY(-2px)}
+.kpi.kb{border-top-color:var(--blue)}.kpi.ka{border-top-color:var(--amber)}.kpi.kg{border-top-color:var(--green)}.kpi.kr{border-top-color:var(--red)}
+.kpi-i{font-size:22px;margin-bottom:5px}.kpi-n{font-size:28px;font-weight:700;line-height:1;margin-bottom:3px}.kpi-l{font-size:10px;color:var(--ink3);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.kpi.kb .kpi-n{color:var(--blue)}.kpi.ka .kpi-n{color:var(--amber)}.kpi.kg .kpi-n{color:var(--green)}.kpi.kr .kpi-n{color:var(--red)}
+
+.d-body{display:grid;grid-template-columns:260px 1fr;gap:18px}
+.d-side{display:flex;flex-direction:column;gap:12px}
+.d-main{display:flex;flex-direction:column;gap:14px}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rxl);padding:20px;box-shadow:var(--sh)}
+.sc-t{font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.6px;margin-bottom:13px}
+.nb{display:flex;align-items:center;gap:11px;width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--rl);padding:12px 14px;cursor:pointer;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:var(--ink2);text-align:left;transition:all .2s;margin-bottom:7px}
+.nb:last-child{margin-bottom:0}
+.nb:hover{border-color:var(--blue);background:var(--blue-lt);color:var(--blue)}
+.nb.np{background:var(--blue);border-color:var(--blue);color:#fff}
+.nb.np:hover{background:var(--blue-dk)}
+.nb.nd{opacity:.4;cursor:not-allowed}
+.nb.nd:hover{border-color:var(--border);background:var(--bg);color:var(--ink2)}
+.nb-ic{font-size:18px;flex-shrink:0}.nb-ar{margin-left:auto;font-size:13px}
+.pr{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;padding:7px 0;border-bottom:1px solid var(--border)}
+.pr:last-child{border-bottom:none}
+.prl{color:var(--ink4);font-weight:500;flex-shrink:0}.prv{color:var(--ink2);font-weight:600;text-align:right;word-break:break-word;max-width:145px}
+.mc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rxl);padding:22px;box-shadow:var(--sh)}
+.mc-t{font-size:11px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;display:flex;align-items:center;gap:7px}
+.rr{display:flex;align-items:center;gap:11px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--rl);cursor:pointer;transition:all .2s;margin-bottom:7px}
+.rr:last-child{margin-bottom:0}
+.rr:hover{border-color:var(--blue);background:var(--blue-lt)}
+.rr-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.rr-dot.pending{background:var(--amber)}.rr-dot.approved{background:var(--green)}.rr-dot.rejected{background:var(--red)}
+.rr-i{flex:1;min-width:0}.rr-t{font-size:13px;font-weight:600;color:var(--ink)}.rr-m{font-size:11px;color:var(--ink4);margin-top:1px}
+.bdg{padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.bdg.pending{background:var(--amber-mid);color:var(--amber)}.bdg.approved{background:var(--green-mid);color:var(--green)}.bdg.rejected{background:var(--red-mid);color:var(--red)}
+.pt{height:8px;background:var(--border);border-radius:999px;overflow:hidden}
+.pf{height:100%;background:linear-gradient(90deg,var(--blue),var(--teal));border-radius:999px;transition:width .5s ease}
+.tl{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--border)}
+.tl:last-child{border-bottom:none}
+.tln{width:21px;height:21px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.tln.pending{background:var(--amber-mid);color:var(--amber)}.tln.approved{background:var(--green-mid);color:var(--green)}.tln.rejected{background:var(--red-mid);color:var(--red)}
+.tla{font-size:13px;font-weight:500;flex:1}
+.tls{font-size:12px;font-weight:700}
+.tls.pending{color:var(--amber)}.tls.approved{color:var(--green)}.tls.rejected{color:var(--red)}
+.empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px;text-align:center;color:var(--ink4);font-size:13px}
+
+/* ── NEW REQUEST ── */
+.nrc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rxl);padding:28px;box-shadow:var(--sh-lg)}
+.sl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--ink3);margin:22px 0 12px;display:flex;align-items:center;gap:7px}
+.sl:first-child{margin-top:0}
+.sdiv{height:1px;background:var(--border);margin:22px 0}
+.auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.ac-t{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--ink4);grid-column:1/-1;padding:10px 0 5px;border-bottom:1px solid var(--border);margin-top:4px}
+.ac-t:first-child{margin-top:0}
+.ap{display:flex;align-items:center;gap:9px;background:var(--bg);border:1.5px solid var(--border);border-radius:var(--r);padding:10px 12px;cursor:pointer;user-select:none;transition:all .18s}
+.ap:hover{border-color:var(--blue);background:var(--blue-lt)}
+.ap.sel{border-color:var(--blue);background:var(--blue-lt)}
+.ap-em{font-size:17px;flex-shrink:0}.ap-lbl{flex:1;font-size:13px;font-weight:500;line-height:1.3}
+.ap-cat{font-size:10px;color:var(--ink4);font-weight:400}
+.ap-cb{width:19px;height:19px;border-radius:5px;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;background:#fff;transition:all .18s;flex-shrink:0}
+.ap.sel .ap-cb{background:var(--blue);border-color:var(--blue);color:#fff}
+.er-row{display:flex;align-items:center;gap:9px;padding:10px 13px;background:#f8faff;border:1px solid var(--border);border-radius:var(--r);margin-bottom:8px}
+.er-row:last-child{margin-bottom:0}
+.er-ic{font-size:16px;flex-shrink:0}.er-nm{font-size:13px;font-weight:600;min-width:110px;flex-shrink:0}
+.er-em{flex:1;padding:8px 11px;font-size:13px;font-family:'Inter',sans-serif;border:1.5px solid var(--border);border-radius:8px;background:#fff;outline:none;transition:border-color .2s}
+.er-em:focus{border-color:var(--blue)}
+textarea.reason-box{width:100%;min-height:80px;padding:11px 13px;font-size:13.5px;font-family:'Inter',sans-serif;line-height:1.75;border:1.5px dashed var(--border2);border-radius:8px;background:#fafbff;color:var(--ink);resize:vertical;outline:none;transition:border-color .2s;margin:6px 0 10px}
+textarea.reason-box:focus{border-color:var(--blue);border-style:solid}
+
+/* ── LETTER ── */
+.letter{background:#fff;border:1px solid #dde3ef;border-radius:var(--rl);padding:36px 44px;position:relative;box-shadow:0 2px 8px rgba(0,0,0,.06),0 12px 40px rgba(0,0,0,.07);margin-top:8px}
+.letter::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--blue),var(--teal));border-radius:var(--rl) var(--rl) 0 0}
+.lh{text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid var(--ink)}
+.l-inst{font-family:'Playfair Display',serif;font-size:19px;font-weight:700}
+.l-txt{font-size:13.5px;line-height:1.9;color:#18181b}
+.l-from{background:#f8faff;border:1px solid var(--border);border-radius:8px;padding:11px 15px;margin-bottom:16px}
+.l-from-hd{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink4);margin-bottom:7px}
+.l-fr{display:flex;gap:6px;margin-bottom:3px}.l-fr:last-child{margin-bottom:0}
+.l-fl{font-weight:700;color:var(--ink);min-width:56px}.l-fv{color:var(--ink2)}
+.l-date{text-align:right;font-size:12px;color:var(--ink3);margin-bottom:14px}
+.l-to{margin-bottom:14px;line-height:1.8;font-size:13.5px}
+.l-sub{margin-bottom:13px;padding:9px 13px;background:#f8faff;border-left:3px solid var(--blue);border-radius:4px;font-size:13.5px}
+.l-sal{font-weight:700;margin-bottom:12px;font-size:13.5px}
+.l-p{margin-bottom:10px;font-size:13.5px}
+.l-close{margin-top:16px;font-size:13.5px}
+.l-sig{margin-top:18px}
+.sig-line{width:130px;border-bottom:1.5px solid var(--ink);margin-bottom:5px}
+.sig-n{font-weight:700;font-size:13px}.sig-d{font-size:12px;color:var(--ink3);margin-top:2px}
+.appr-sec{margin-top:22px;padding-top:18px;border-top:1.5px dashed var(--border2)}
+.appr-hd{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--ink4);margin-bottom:12px}
+.appr-row{display:flex;gap:9px;flex-wrap:wrap}
+.ac{flex:1;min-width:85px;border:1.5px solid var(--border);border-radius:var(--r);padding:11px 7px;text-align:center}
+.ac.approved{border-color:var(--green);background:var(--green-lt)}.ac.rejected{border-color:var(--red);background:var(--red-lt)}
+.ac-nm{font-size:11px;font-weight:700;margin-bottom:7px;color:var(--ink)}
+.ac-sign{height:26px;border-bottom:1px dashed #ccc;margin-bottom:7px;font-size:15px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:2px}
+.ac-st{font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;display:inline-block}
+.ac-st.pending{background:var(--amber-mid);color:var(--amber)}.ac-st.approved{background:var(--green-mid);color:var(--green)}.ac-st.rejected{background:var(--red-mid);color:var(--red)}
+
+/* ── TRACK ── */
+.tr-hero{display:flex;align-items:center;gap:18px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rxl);padding:20px 24px;margin-bottom:18px;box-shadow:var(--sh)}
+.tr-badge{padding:8px 20px;border-radius:999px;font-size:14px;font-weight:700;display:inline-flex;align-items:center;gap:7px}
+.tr-badge.pending{background:var(--amber-mid);color:var(--amber)}.tr-badge.approved{background:var(--green-mid);color:var(--green)}.tr-badge.rejected{background:var(--red-mid);color:var(--red)}
+.tr-prog{flex:1}.tr-pl{font-size:12px;font-weight:600;color:var(--ink3);margin-bottom:6px}
+.tr-tbl{background:var(--surface);border:1px solid var(--border);border-radius:var(--rxl);overflow:hidden;box-shadow:var(--sh)}
+table.t{width:100%;border-collapse:collapse}
+table.t th{background:#f8fafc;padding:11px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--ink3);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.4px}
+table.t td{padding:13px 16px;font-size:13px;border-bottom:1px solid var(--border)}
+table.t tr:last-child td{border-bottom:none}
+table.t tbody tr:hover td{background:#f8fafc}
+.appr-banner{display:none;background:linear-gradient(135deg,var(--green-lt),#ecfeff);border:1px solid var(--green-mid);border-radius:var(--rxl);padding:26px;text-align:center;margin-top:18px}
+.appr-banner.show{display:block}
+.appr-banner h3{font-size:19px;font-weight:700;color:var(--green);margin-bottom:5px}
+.appr-banner p{font-size:13px;color:var(--ink3);margin-bottom:18px}
+
+/* ── SLIP ── */
+.slip-bar{display:flex;gap:11px;justify-content:center;flex-wrap:wrap;margin-bottom:24px}
+.slip{background:#fff;border:1px solid #ddd;border-radius:var(--rl);padding:40px 48px;position:relative;overflow:hidden;box-shadow:var(--sh-lg)}
+.slip::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,var(--green),var(--teal))}
+.slip-wm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);font-family:'Playfair Display',serif;font-size:84px;font-weight:700;color:rgba(22,163,74,.05);white-space:nowrap;pointer-events:none}
+.slip-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1.5px solid #e5e7eb}
+.slip-inst{font-family:'Playfair Display',serif;font-size:19px;font-weight:700}
+.slip-pill{display:inline-flex;align-items:center;gap:5px;background:var(--green-mid);color:var(--green);font-size:12px;font-weight:700;padding:6px 16px;border-radius:999px;border:1.5px solid rgba(22,163,74,.25)}
+.slip-title{text-align:center;font-family:'Playfair Display',serif;font-size:17px;font-weight:700;letter-spacing:.5px;margin-bottom:20px}
+.slip-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px 28px;margin-bottom:18px;font-size:13px}
+.sm{display:flex;gap:7px;align-items:baseline}.sml{font-weight:700;min-width:88px;flex-shrink:0}.smv{color:var(--ink2)}
+.slip-reason{background:#f8faff;border-left:3px solid var(--blue);border-radius:4px;padding:11px 15px;margin-bottom:20px;font-size:13px;line-height:1.7}
+.slip-reason strong{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink4);margin-bottom:4px}
+.slip-appr-t{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--ink4);margin-bottom:11px}
+.slip-appr{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.sac{flex:1;min-width:90px;border:1.5px solid var(--green-mid);border-radius:var(--r);padding:12px 8px;text-align:center;background:linear-gradient(135deg,#fff,var(--green-lt))}
+.sac-n{font-size:11px;font-weight:700;margin-bottom:7px}.sac-tk{font-size:24px;margin-bottom:3px}.sac-l{font-size:9px;font-weight:700;color:var(--green);text-transform:uppercase}
+.slip-foot{display:flex;align-items:center;justify-content:space-between;padding-top:13px;border-top:1px solid #e5e7eb;font-size:11px;color:var(--ink4)}
+.slip-ok{display:flex;align-items:center;gap:5px;font-weight:700;font-size:12px;color:var(--green)}
+
+/* ── ACTION PAGE ── */
+#pg-action{background:linear-gradient(135deg,#f0f4ff,#ecfeff)}
+.act-card{max-width:500px;margin:60px auto;background:var(--surface);border-radius:var(--rxl);padding:40px 36px;text-align:center;box-shadow:var(--sh-lg);border:1px solid var(--border)}
+.act-card h2{font-family:'Playfair Display',serif;font-size:23px;margin-bottom:8px}
+.act-sub{font-size:14px;color:var(--ink3);margin-bottom:22px;line-height:1.7}
+.act-det{background:var(--bg);border-radius:var(--rl);padding:14px 18px;margin-bottom:22px;text-align:left}
+.adr{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px}
+.adr:last-child{border-bottom:none}
+.adrl{color:var(--ink4);font-weight:500;flex-shrink:0}.adrv{color:var(--ink2);font-weight:600;text-align:right}
+.act-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.act-done{display:none;flex-direction:column;align-items:center;gap:11px}
+
+/* ── EJS NOTICE ── */
+.ejs-box{background:#fefce8;border:1px solid #fde68a;border-radius:var(--rl);padding:14px 18px;margin-bottom:18px;font-size:13px}
+.ejs-box strong{color:#92400e;display:block;margin-bottom:5px}
+.ejs-box p{color:#78350f;line-height:1.6;margin-bottom:11px}
+.ejs-ins{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:9px}
+.ejs-in{padding:7px 11px;border:1px solid #fde68a;border-radius:8px;font-size:12px;font-family:Inter,sans-serif;background:#fffbeb;width:100%;outline:none}
+.ejs-in:focus{border-color:var(--amber)}
+.ejs-sv{padding:6px 16px;background:var(--amber);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif}
+
+@media print{
+  body{background:#fff}body::before,.back,.ph,.slip-bar,#loader,#toast{display:none!important}
+  .page{display:none!important}#pg-slip.active{display:block!important}
+  .wrap{padding:0}.slip{box-shadow:none;border:1px solid #ccc}
+}
+@media(max-width:700px){
+  .w-wrap{grid-template-columns:1fr;padding:36px 18px}.w-card{display:none}
+  .role-row,.fgrid{grid-template-columns:1fr}.fg.full{grid-column:1}
+  .kpi-row{grid-template-columns:1fr 1fr}.d-body{grid-template-columns:1fr}
+  .auth-grid{grid-template-columns:1fr}.slip-meta{grid-template-columns:1fr}
+  .letter,.slip{padding:22px 16px}.ejs-ins{grid-template-columns:1fr}
+  .tr-hero{flex-direction:column;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<div id="loader"><div class="spin"></div><div class="spin-txt" id="loader-txt">Please wait...</div></div>
+
+<!-- PAGE 1: WELCOME -->
+<div class="page active" id="pg-welcome">
+  <div class="w-wrap">
+    <div>
+      <div class="w-badge">● Digital First</div>
+      <h1 class="w-title">Digital<br/><em>Approval</em><br/>System</h1>
+      <p class="w-sub">Submit permission requests digitally. Auto-generate letters, email authorities with approve/reject links, and download your official slip.</p>
+      <button class="btn btn-p" style="padding:15px 34px;font-size:15px;border-radius:999px;box-shadow:0 4px 18px rgba(37,99,235,.35)" onclick="go('pg-role')">Get Started →</button>
+      <div class="w-stats">
+        <div class="ws"><span class="ws-n">25+</span><span class="ws-l">Authorities</span></div><div class="wd"></div>
+        <div class="ws"><span class="ws-n">Email</span><span class="ws-l">Notifications</span></div><div class="wd"></div>
+        <div class="ws"><span class="ws-n">Live</span><span class="ws-l">Tracking</span></div><div class="wd"></div>
+        <div class="ws"><span class="ws-n">Multi</span><span class="ws-l">User</span></div>
+      </div>
+    </div>
+    <div class="w-card">
+      <div style="font-size:14px;font-weight:700;color:var(--ink2);margin-bottom:16px">✨ How it works</div>
+      <div class="w-feat"><span class="wfi">📝</span><div><div class="wft">Fill Your Details Once</div><div class="wfd">Your profile auto-fills every permission letter you create.</div></div></div>
+      <div class="w-feat"><span class="wfi">🏛️</span><div><div class="wft">Select Authorities</div><div class="wfd">25+ authorities across College, Corporate & Company.</div></div></div>
+      <div class="w-feat"><span class="wfi">📧</span><div><div class="wft">Email with Approve/Reject</div><div class="wfd">Each authority gets the letter by email with one-click response links.</div></div></div>
+      <div class="w-feat"><span class="wfi">⬇️</span><div><div class="wft">Download Approved Slip</div><div class="wfd">Once all approve, download your official permission slip.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 2: ROLE -->
+<div class="page" id="pg-role">
+  <div class="wrap">
+    <button class="back" onclick="go('pg-welcome')">← Back</button>
+    <div class="ph"><h2>Who are you?</h2><p>Select your role to continue</p></div>
+    <div class="role-row">
+      <div class="rc" onclick="pickRole('student')">
+        <span class="rc-em">🎓</span>
+        <div class="rc-t">Student</div>
+        <div class="rc-d">Submit requests as a student. Requires name, department, register number, year, and mobile.</div>
+        <div class="rc-go">Continue as Student →</div>
+      </div>
+      <div class="rc" onclick="pickRole('staff')">
+        <span class="rc-em">💼</span>
+        <div class="rc-t">Staff / Employee</div>
+        <div class="rc-d">Submit requests as a staff or employee. Requires name, department, and mobile number.</div>
+        <div class="rc-go">Continue as Staff →</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 3: DETAILS -->
+<div class="page" id="pg-details">
+  <div class="wrap">
+    <button class="back" onclick="go('pg-role')">← Back</button>
+    <div class="ph">
+      <h2 id="det-heading">Your Details</h2>
+      <p>Fill in your profile — it will auto-fill every letter you generate</p>
+    </div>
+    <div class="fcard">
+      <div class="fgrid">
+        <div class="fg full">
+          <label>Institution / Organisation Name *</label>
+          <input type="text" id="f-inst" placeholder="e.g. Sri Venkateswara College of Engineering"/>
+        </div>
+        <div class="fg full">
+          <label>Full Name *</label>
+          <input type="text" id="f-name" placeholder="Enter your full name"/>
+        </div>
+
+        <!-- Student dept dropdown -->
+        <div class="fg full" id="fld-sdept" style="display:none">
+          <label>Department *</label>
+          <select id="f-sdept">
+            <option value="">Select Department</option>
+            <option>Computer Science and Engineering</option>
+            <option>Computer Science and Business Systems</option>
+            <option>Computer Science (AI &amp; ML)</option>
+            <option>Computer Science (Data Science)</option>
+            <option>Information Technology</option>
+            <option>Electronics and Communication Engineering</option>
+            <option>Electrical and Electronics Engineering</option>
+            <option>Mechanical Engineering</option>
+            <option>Civil Engineering</option>
+            <option>Aeronautical Engineering</option>
+            <option>Automobile Engineering</option>
+            <option>Biomedical Engineering</option>
+            <option>Biotechnology</option>
+            <option>Chemical Engineering</option>
+            <option>Marine Engineering</option>
+            <option>Instrumentation Engineering</option>
+            <option>Mathematics</option>
+            <option>Physics</option>
+            <option>Chemistry</option>
+            <option>English</option>
+            <option>MBA</option>
+            <option>MCA</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+        <!-- Staff dept text -->
+        <div class="fg full" id="fld-edept" style="display:none">
+          <label>Department / Division *</label>
+          <input type="text" id="f-edept" placeholder="e.g. Human Resources, IT, Finance"/>
+        </div>
+
+        <!-- Student only -->
+        <div class="fg" id="fld-regno" style="display:none">
+          <label>Register Number *</label>
+          <input type="text" id="f-regno" placeholder="e.g. 2021CS001"/>
+        </div>
+        <div class="fg" id="fld-year" style="display:none">
+          <label>Year *</label>
+          <select id="f-year">
+            <option value="">Select Year</option>
+            <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+          </select>
+        </div>
+
+        <div class="fg full">
+          <label>Mobile Number *</label>
+          <input type="tel" id="f-mobile" placeholder="10-digit mobile number" maxlength="10"/>
+        </div>
+      </div>
+      <button class="btn btn-p btn-w" onclick="submitDetails()">Go to Dashboard →</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 4: DASHBOARD -->
+<div class="page" id="pg-dash">
+  <div class="d-wrap">
+    <div class="d-top">
+      <div class="d-av" id="d-av">?</div>
+      <div class="d-info">
+        <div class="d-gr">Welcome back,</div>
+        <div class="d-nm" id="d-nm">—</div>
+        <div class="d-mt" id="d-mt">—</div>
+      </div>
+      <div class="d-time" id="d-time"></div>
+      <button class="d-lo" onclick="signOut()">Sign Out</button>
+    </div>
+
+    <div class="kpi-row">
+      <div class="kpi kb"><div class="kpi-i">📋</div><div class="kpi-n" id="k-tot">0</div><div class="kpi-l">Total</div></div>
+      <div class="kpi ka"><div class="kpi-i">⏳</div><div class="kpi-n" id="k-pen">0</div><div class="kpi-l">Pending</div></div>
+      <div class="kpi kg"><div class="kpi-i">✅</div><div class="kpi-n" id="k-apr">0</div><div class="kpi-l">Approved</div></div>
+      <div class="kpi kr"><div class="kpi-i">❌</div><div class="kpi-n" id="k-rej">0</div><div class="kpi-l">Rejected</div></div>
+    </div>
+
+    <div class="d-body">
+      <div class="d-side">
+        <div class="sc">
+          <div class="sc-t">Navigation</div>
+          <button class="nb np" onclick="openNewReq()"><span class="nb-ic">✏️</span><span>New Request</span><span class="nb-ar">→</span></button>
+          <button class="nb" onclick="goTrack()"><span class="nb-ic">📊</span><span>Track Approval</span><span class="nb-ar">→</span></button>
+          <button class="nb" id="nb-dl" onclick="goDownload()"><span class="nb-ic">⬇️</span><span>Download Slip</span><span class="nb-ar">→</span></button>
+        </div>
+        <div class="sc">
+          <div class="sc-t">My Profile</div>
+          <div id="prof-rows"></div>
+        </div>
+      </div>
+      <div class="d-main">
+        <div class="mc" id="prog-card" style="display:none">
+          <div class="mc-t"><span>📈</span> Active Request Progress</div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--ink3);margin-bottom:7px">
+            <span id="prog-ptype">—</span><span id="prog-cnt">0/0</span>
+          </div>
+          <div class="pt" style="margin-bottom:14px"><div class="pf" id="prog-pf" style="width:0%"></div></div>
+          <div id="prog-tl"></div>
+        </div>
+        <div class="mc">
+          <div class="mc-t"><span>🕐</span> Recent Requests</div>
+          <div id="req-list"><div class="empty"><div style="font-size:34px">📭</div><div>No requests yet.</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 5: NEW REQUEST -->
+<div class="page" id="pg-newreq">
+  <div class="wrap wide">
+    <button class="back" onclick="go('pg-dash')">← Dashboard</button>
+    <div class="ph">
+      <h2>New Permission Request</h2>
+      <p>Fill the form, select authorities with their email IDs — the letter is generated and emailed instantly.</p>
+    </div>
+
+    <div class="nrc">
+      <!-- Part 1 -->
+      <div class="sl"><span>📋</span> Permission Details</div>
+      <div class="fgrid">
+        <div class="fg">
+          <label>Permission Type *</label>
+          <select id="nr-pt" onchange="renderLetter()">
+            <option value="">Select type</option>
+            <option>Late Entry</option><option>Early Exit</option><option>Hostel Out Pass</option>
+            <option>Medical Leave</option><option>Event Participation</option>
+            <option>Industrial Visit</option><option>Sports Duty</option>
+            <option>Personal Emergency</option><option>Exam Duty</option>
+            <option>On Duty / OD</option><option>Work From Home</option>
+            <option>Conference / Seminar</option><option>Official Tour</option>
+            <option>Training / Workshop</option><option>Other</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Date *</label>
+          <input type="date" id="nr-dt" onchange="renderLetter()"/>
+        </div>
+        <div class="fg">
+          <label>Out Time <span class="opt">(optional)</span></label>
+          <input type="time" id="nr-ot" onchange="renderLetter()"/>
+        </div>
+        <div class="fg">
+          <label>In Time <span class="opt">(optional)</span></label>
+          <input type="time" id="nr-it" onchange="renderLetter()"/>
+        </div>
+      </div>
+
+      <div class="sdiv"></div>
+
+      <!-- Part 2: Authorities -->
+      <div class="sl"><span>🏛️</span> Select Authorities & Email IDs</div>
+      <p style="font-size:13px;color:var(--ink3);margin-bottom:13px">Select authorities who need to approve. Each gets the letter by email with Approve / Reject links. Enter any valid email ID.</p>
+      <div class="auth-grid" id="auth-grid"></div>
+      <div id="email-sec" style="display:none;margin-top:14px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--ink4);margin-bottom:9px">Email IDs for selected authorities:</div>
+        <div id="email-rows"></div>
+      </div>
+
+      <div class="sdiv"></div>
+
+      <!-- Part 3: Letter -->
+      <div class="sl"><span>📄</span> Auto-Generated Permission Letter</div>
+      <p style="font-size:13px;color:var(--ink3);margin-bottom:12px">Your details are auto-filled. Write your reason in the text box inside the letter below.</p>
+
+      <div class="letter" id="letter-preview">
+        <div class="lh">
+          <div class="l-inst" id="lp-inst">Institution Name</div>
+        </div>
+        <div class="l-date" id="lp-date">Date: —</div>
+        <div class="l-from">
+          <div class="l-from-hd">From</div>
+          <div id="lp-from"></div>
+        </div>
+        <div class="l-to" id="lp-to">To,<br/>—</div>
+        <div class="l-txt">
+          <div class="l-sub"><strong>Sub:</strong> Request for — <strong id="lp-sub">—</strong></div>
+          <div class="l-sal">Respected Sir/Madam,</div>
+          <p class="l-p">I am <strong id="lp-name">—</strong><span id="lp-reg"></span> from the Department of <strong id="lp-dept">—</strong>, and I am humbly requesting permission for <strong id="lp-pt">—</strong>.</p>
+          <p class="l-p">The reason for my request is as follows:</p>
+          <textarea class="reason-box" id="nr-reason" placeholder="Write your reason clearly here..." rows="4" oninput="renderLetter()"></textarea>
+          <div id="lp-time" style="display:none"><p class="l-p">The requested time period is from <strong id="lp-ot">—</strong> to <strong id="lp-it">—</strong>.</p></div>
+          <p class="l-p">I assure you that I will complete all pending responsibilities and this will not affect my duties in any manner whatsoever.</p>
+          <p class="l-p">I kindly request you to consider my application and grant the necessary permission at the earliest.</p>
+          <div class="l-close">
+            <p class="l-p">Thanking you,</p>
+            <p class="l-p">Yours faithfully,</p>
+            <div class="l-sig">
+              <div class="sig-line"></div>
+              <div class="sig-n" id="lp-sig-n">—</div>
+              <div class="sig-d" id="lp-sig-d">—</div>
+              <div class="sig-d" id="lp-sig-m">—</div>
+            </div>
+          </div>
+          <div id="lp-appr" style="display:none">
+            <div class="appr-sec">
+              <div class="appr-hd">For Official Use — Approval Section</div>
+              <div class="appr-row" id="lp-appr-row"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn btn-p btn-w" onclick="submitRequest()">📧 Submit & Send to Authorities</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 6: TRACK -->
+<div class="page" id="pg-track">
+  <div class="wrap wide">
+    <button class="back" onclick="go('pg-dash')">← Dashboard</button>
+    <div class="ph"><h2>Track Approval Status</h2><p>Live approval status for your permission request</p></div>
+    <div class="tr-hero">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Overall Status</div>
+        <div class="tr-badge pending" id="tr-badge">⏳ Pending</div>
+      </div>
+      <div class="tr-prog">
+        <div class="tr-pl" id="tr-pl">0 / 0 Approved</div>
+        <div class="pt"><div class="pf" id="tr-pf" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="tr-tbl">
+      <table class="t">
+        <thead><tr><th>#</th><th>Authority</th><th>Email Sent To</th><th>Status</th><th>Resend</th></tr></thead>
+        <tbody id="tr-tbody"></tbody>
+      </table>
+    </div>
+    <div class="appr-banner" id="appr-banner">
+      <h3>🎉 Fully Approved!</h3>
+      <p>All selected authorities have approved your request. Your official permission slip is ready.</p>
+      <button class="btn btn-g" style="padding:13px 30px;border-radius:999px" onclick="go('pg-slip');buildSlip()">⬇️ Download Permission Slip</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 7: SLIP -->
+<div class="page" id="pg-slip">
+  <div class="wrap wide">
+    <button class="back" onclick="go('pg-dash')">← Dashboard</button>
+    <div class="ph"><h2>Permission Slip</h2><p>Fully approved. Print or save your official permission slip.</p></div>
+    <div class="slip-bar">
+      <button class="btn btn-g" onclick="window.print()">🖨️ Print Slip</button>
+      <button class="btn btn-o" onclick="go('pg-dash')">← Dashboard</button>
+    </div>
+    <div class="slip" id="slip-el">
+      <div class="slip-wm">APPROVED</div>
+      <div class="slip-top">
+        <div><div class="slip-inst" id="slip-inst">—</div></div>
+        <div class="slip-pill">✅ Fully Approved</div>
+      </div>
+      <div class="slip-title">OFFICIAL PERMISSION SLIP</div>
+      <div class="slip-meta" id="slip-meta"></div>
+      <div class="slip-reason"><strong>Reason</strong><span id="slip-reason">—</span></div>
+      <div class="slip-appr-t">Approved By</div>
+      <div class="slip-appr" id="slip-appr"></div>
+      <div class="slip-foot">
+        <div class="slip-ok">✅ All Authorities Approved</div>
+        <div>
+          <div>Generated: <span id="slip-gen">—</span></div>
+          <div style="font-family:monospace;font-size:10px;margin-top:2px" id="slip-id">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE 8: AUTHORITY ACTION (from email link) -->
+<div class="page" id="pg-action">
+  <div style="padding:40px 22px;position:relative;z-index:1">
+    <div class="act-card">
+      <div id="act-pend">
+        <div style="font-size:50px;margin-bottom:14px">🔐</div>
+        <h2 id="act-title">Permission Request</h2>
+        <p class="act-sub" id="act-sub">Review and respond to this permission request.</p>
+        <div class="act-det" id="act-det"></div>
+        <p style="font-size:13px;color:var(--ink3);margin-bottom:18px">Click Approve or Reject to record your decision:</p>
+        <div class="act-btns">
+          <button class="btn btn-g" style="padding:13px 32px" onclick="doAct('approved')">✅ Approve</button>
+          <button class="btn" style="background:var(--red);color:#fff;padding:13px 32px" onclick="doAct('rejected')">❌ Reject</button>
+        </div>
+      </div>
+      <div class="act-done" id="act-done">
+        <div style="font-size:54px" id="act-done-ic">✅</div>
+        <div style="font-size:20px;font-weight:700" id="act-done-t">Response Recorded</div>
+        <div style="font-size:14px;color:var(--ink3)" id="act-done-s">Thank you for your response.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── AUTHORITIES ───────────────────────────────────
+const AUTHS = [
+  {id:'class_advisor',   name:'Class Advisor',      icon:'👩‍🏫', cat:'College'},
+  {id:'mentor',          name:'Mentor',             icon:'🧑‍💼', cat:'College'},
+  {id:'hod',             name:'HOD',                icon:'🏛️',  cat:'College'},
+  {id:'vice_principal',  name:'Vice Principal',     icon:'🎓',  cat:'College'},
+  {id:'principal',       name:'Principal',          icon:'🎩',  cat:'College'},
+  {id:'dean',            name:'Dean',               icon:'📚',  cat:'College'},
+  {id:'registrar',       name:'Registrar',          icon:'📋',  cat:'College'},
+  {id:'gate_pass',       name:'Gate Pass Incharge', icon:'🚪',  cat:'College'},
+  {id:'placement',       name:'Placement Officer',  icon:'💼',  cat:'College'},
+  {id:'lab_incharge',    name:'Lab Incharge',       icon:'🔬',  cat:'College'},
+  {id:'warden',          name:'Warden',             icon:'🏠',  cat:'College'},
+  {id:'coordinator',     name:'Coordinator',        icon:'📌',  cat:'College'},
+  {id:'sports_director', name:'Sports Director',    icon:'🏅',  cat:'College'},
+  {id:'nss_officer',     name:'NSS Officer',        icon:'🌿',  cat:'College'},
+  {id:'team_lead',       name:'Team Lead',          icon:'👤',  cat:'Corporate'},
+  {id:'manager',         name:'Manager',            icon:'🗂️',  cat:'Corporate'},
+  {id:'sr_manager',      name:'Senior Manager',     icon:'📊',  cat:'Corporate'},
+  {id:'hr_exec',         name:'HR Executive',       icon:'🧑‍💼', cat:'Corporate'},
+  {id:'hr_mgr',          name:'HR Manager',         icon:'🏢',  cat:'Corporate'},
+  {id:'project_mgr',     name:'Project Manager',    icon:'📁',  cat:'Corporate'},
+  {id:'dept_head',       name:'Department Head',    icon:'🏛️',  cat:'Corporate'},
+  {id:'director',        name:'Director',           icon:'🎯',  cat:'Corporate'},
+  {id:'ceo',             name:'CEO / MD',           icon:'👔',  cat:'Corporate'},
+  {id:'supervisor',      name:'Supervisor',         icon:'🔧',  cat:'Company'},
+  {id:'site_incharge',   name:'Site Incharge',      icon:'🏗️',  cat:'Company'},
+  {id:'admin_officer',   name:'Admin Officer',      icon:'📑',  cat:'Company'},
+  {id:'safety_officer',  name:'Safety Officer',     icon:'🦺',  cat:'Company'},
+  {id:'gen_mgr',         name:'General Manager',    icon:'🌐',  cat:'Company'},
+];
+
+// ─── STATE ───────────────────────────────────────────
+let USER = null;
+let REQS = [];
+let ACTIVE_ID = null;
+let SEL_AUTHS = [];
+let EJS = {};
+
+function uKey(u){ return 'das3_' + u.mobile; }
+function saveReqs(){ if(USER) localStorage.setItem(uKey(USER), JSON.stringify({reqs:REQS, activeId:ACTIVE_ID})); }
+async function loadReqs(u){
+  try {
+    const response = await fetch(`${getB()}/api/requests?submittedBy=${encodeURIComponent(u.mobile)}`);
+    if (response.ok) {
+      const requests = await response.json();
+      const normalized = requests.map(r => ({
+        ...r,
+        status: r.status || 'pending',
+        authorities: (r.authorities || []).map(a => ({ ...a, status: a.status || 'pending' }))
+      }))
+      .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      REQS = normalized;
+      if (ACTIVE_ID && normalized.some(r => r.id === ACTIVE_ID)) {
+        // preserve currently active request if it still exists
+      } else {
+        ACTIVE_ID = normalized.length > 0 ? normalized[0].id : null;
+      }
+      saveReqs();
+    } else {
+      // Fallback to localStorage
+      const d = JSON.parse(localStorage.getItem(uKey(u)) || '{}');
+      REQS = (d.reqs || []).map(r => ({ ...r, status: r.status || 'pending' }));
+      ACTIVE_ID = d.activeId || null;
+    }
+  } catch(e){ 
+    // Fallback to localStorage
+    const d = JSON.parse(localStorage.getItem(uKey(u)) || '{}');
+    REQS = (d.reqs || []).map(r => ({ ...r, status: r.status || 'pending' }));
+    ACTIVE_ID = d.activeId || null;
+  }
+}
+function getActive(){ return REQS.find(r=>r.id===ACTIVE_ID) || null; }
+function patchActive(p){
+  const i = REQS.findIndex(r=>r.id===ACTIVE_ID);
+  if(i>=0){ Object.assign(REQS[i],p); saveReqs(); }
+}
+
+// ─── UTILS ───────────────────────────────────────────
+function go(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function toast(msg, type='info'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = type + ' show';
+  clearTimeout(t._t);
+  t._t = setTimeout(()=>{ t.className=''; }, 3000);
+}
+function loader(on, msg='Please wait...'){
+  const txtEl = document.getElementById('loader-txt');
+  const spinEl = document.querySelector('#loader .spin');
+  if(on){
+    txtEl.textContent = msg;
+    txtEl.style.color = '#fff'; // reset color
+    spinEl.style.display = 'block'; // show spinner
+    document.getElementById('loader').className = 'on';
+  } else {
+    document.getElementById('loader').className = '';
+  }
+}
+function uid(){ return 'REQ' + Date.now().toString(36).toUpperCase(); }
+function fmtDate(d){
+  if(!d) return '—';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
+}
+function fmtTime(t){
+  if(!t) return '—';
+  const [h,m] = t.split(':'); const hr = +h;
+  return `${hr%12||12}:${m} ${hr>=12?'PM':'AM'}`;
+}
+function cap(s){ return s ? s[0].toUpperCase()+s.slice(1) : ''; }
+function tick(){
+  const el = document.getElementById('d-time');
+  if(!el) return;
+  const n = new Date();
+  el.innerHTML = n.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'}) +
+    '<br/>' + n.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ─── BACKEND CONFIG ───────────────────────────────────
+const BACKEND_URL = window.location.origin || 'http://localhost:3000';
+let sseSource = null; // SSE EventSource for live updates
+let pollInterval = null; // Polling interval for updates
+
+function getB(){ return BACKEND_URL; }
+
+async function checkBackend(){
+  try {
+    const r = await fetch(getB()+'/api/health',{method:'GET',signal:AbortSignal.timeout(3000)});
+    return r.ok;
+  } catch(e){ return false; }
+}
+
+// ─── EMAILJS CREDENTIALS (hardcoded) ─────────────────
+const EJS_CREDS = {
+  service_id:  'service_mljgocg',
+  template_id: 'template_5247c1b',
+  public_key:  '8D4DbJIrZjOPCHD2t'
+};
+
+function loadEJS(){
+  // Auto-push credentials to backend on every load
+  fetch(getB()+'/api/config',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(EJS_CREDS)
+  }).catch(()=>{}); // silent — backend may not be up yet, will retry on submit
+}
+
+async function testBackend(){} // kept for compatibility, no longer shown in UI
+
+// ── SSE Live Updates — browser listens for instant authority responses ──
+function startSSE(reqId){
+  stopSSE();
+  try {
+    sseSource = new EventSource(`${getB()}/api/updates/${reqId}`);
+    sseSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if(data.type !== 'status') return;
+        // Apply backend status to local state
+        const idx = REQS.findIndex(x=>x.id===reqId);
+        if(idx < 0) return;
+        REQS[idx].status = data.status;
+        REQS[idx].authorities = REQS[idx].authorities.map(local => {
+          const remote = (data.authorities||[]).find(x=>x.id===local.id);
+          return remote ? {...local, status: remote.status, respondedAt: remote.respondedAt} : local;
+        });
+        saveReqs();
+        refreshDash();
+        if(document.getElementById('pg-track').classList.contains('active')) fillTrack();
+        // Show a toast when an authority responds
+        if(data.updatedBy && data.action){
+          const icon = data.action==='approved' ? '✅' : '❌';
+          toast(`${icon} ${data.updatedBy} ${data.action} the request!`, data.action==='approved'?'ok':'err');
+        }
+      } catch(e){}
+    };
+    sseSource.onerror = () => { /* reconnects automatically */ };
+    console.log('📡 SSE live update connected for', reqId);
+  } catch(e){ console.log('SSE not available:', e.message); }
+}
+
+function startPolling(){
+  if(pollInterval) clearInterval(pollInterval);
+  pollInterval = null;
+  
+  pollInterval = setInterval(async () => {
+    if (!USER) return;
+    try {
+      const response = await fetch(`${getB()}/api/requests?submittedBy=${encodeURIComponent(USER.mobile)}`);
+      if (response.ok) {
+        const requests = await response.json();
+        let hasUpdate = false;
+        requests.forEach(remote => {
+          const idx = REQS.findIndex(local => local.id === remote.id);
+          if (idx >= 0) {
+            const oldStatus = REQS[idx].status;
+            const oldAuths = REQS[idx].authorities ? REQS[idx].authorities.map(a => a.status).join(',') : '';
+            const newAuths = remote.authorities ? remote.authorities.map(a => a.status).join(',') : '';
+            if (oldStatus !== remote.status || oldAuths !== newAuths) {
+              hasUpdate = true;
+              console.log('✨ Update detected:', {id: remote.id, oldStatus, newStatus: remote.status});
+            }
+            REQS[idx] = { ...remote, status: remote.status || 'pending', authorities: remote.authorities || [] };
+          } else {
+            REQS.push({ ...remote, status: remote.status || 'pending', authorities: remote.authorities || [] });
+            hasUpdate = true;
+          }
+        });
+        if (hasUpdate) {
+          saveReqs();
+          const active = getActive();
+          refreshDash();
+          if(document.getElementById('pg-track').classList.contains('active')) fillTrack();
+          if (active && active.status !== 'pending') {
+            const icon = active.status === 'approved' ? '✅' : active.status === 'rejected' ? '❌' : '⏳';
+            toast(`${icon} Status: ${active.status}!`, active.status === 'approved' ? 'ok' : 'err');
+          }
+        }
+      }
+    } catch(e){ console.error('Polling error:', e); }
+  }, 500);
+  console.log('🔄 Polling started - 500ms interval');
+}
+
+function stopPolling(){
+  if(pollInterval){ clearInterval(pollInterval); pollInterval=null; console.log('⏹️ Polling stopped'); }
+}
+function stopSSE(){ if(sseSource){ sseSource.close(); sseSource=null; console.log('⏹️ SSE stopped'); } }
+
+// ─── PAGE 2 — ROLE ────────────────────────────────────
+function pickRole(role){
+  USER = null;
+  document.getElementById('det-heading').textContent = role==='student' ? 'Student Details' : 'Staff / Employee Details';
+  document.getElementById('fld-sdept').style.display  = role==='student' ? '' : 'none';
+  document.getElementById('fld-edept').style.display  = role==='staff'   ? '' : 'none';
+  document.getElementById('fld-regno').style.display  = role==='student' ? '' : 'none';
+  document.getElementById('fld-year').style.display   = role==='student' ? '' : 'none';
+  document.getElementById('f-inst').value = '';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-sdept').value = '';
+  document.getElementById('f-edept').value = '';
+  document.getElementById('f-regno').value = '';
+  document.getElementById('f-year').value = '';
+  document.getElementById('f-mobile').value = '';
+  window._role = role;
+  go('pg-details');
+}
+
+// ─── PAGE 3 — DETAILS ─────────────────────────────────
+function submitDetails(){
+  const role   = window._role || 'student';
+  const inst   = document.getElementById('f-inst').value.trim();
+  const name   = document.getElementById('f-name').value.trim();
+  const dept   = role==='student'
+    ? document.getElementById('f-sdept').value
+    : document.getElementById('f-edept').value.trim();
+  const regno  = document.getElementById('f-regno').value.trim();
+  const year   = document.getElementById('f-year').value;
+  const mobile = document.getElementById('f-mobile').value.trim();
+
+  if(!inst){ toast('Please enter Institution / Organisation name', 'err'); return; }
+  if(!name){ toast('Please enter your full name', 'err'); return; }
+  if(!dept){ toast('Please select / enter your department', 'err'); return; }
+  if(role==='student' && !regno){ toast('Please enter Register Number', 'err'); return; }
+  if(role==='student' && !year){ toast('Please select Year', 'err'); return; }
+  if(!mobile || !/^\d{10}$/.test(mobile)){ toast('Please enter a valid 10-digit mobile number', 'err'); return; }
+
+  USER = { inst, name, dept, regno, year, mobile, role };
+  loadReqs(USER);
+  localStorage.setItem('das3_lastuser', JSON.stringify(USER));
+  buildDash();
+  go('pg-dash');
+  toast('Welcome, ' + name + '!', 'ok');
+}
+
+// ─── PAGE 4 — DASHBOARD ───────────────────────────────
+function buildDash(){
+  const u = USER;
+  if(!u) return;
+  const ini = u.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('d-av').textContent = ini;
+  document.getElementById('d-nm').textContent = u.name;
+  document.getElementById('d-mt').textContent =
+    u.inst + ' · ' + u.dept + (u.role==='student' ? ' · '+u.regno+' · '+u.year : '');
+  tick();
+
+  const pr = [
+    ['Role', cap(u.role)],
+    ['Institution', u.inst],
+    ['Department', u.dept],
+    ...(u.role==='student' ? [['Reg No', u.regno], ['Year', u.year]] : []),
+    ['Mobile', u.mobile],
+  ];
+  document.getElementById('prof-rows').innerHTML = pr.map(([l,v])=>
+    `<div class="pr"><span class="prl">${l}</span><span class="prv">${v||'—'}</span></div>`
+  ).join('');
+
+  refreshDash();
+}
+
+function refreshDash(){
+  const all = REQS;
+  document.getElementById('k-tot').textContent = all.length;
+  document.getElementById('k-pen').textContent = all.filter(r=>r.status==='pending').length;
+  document.getElementById('k-apr').textContent = all.filter(r=>r.status==='approved').length;
+  document.getElementById('k-rej').textContent = all.filter(r=>r.status==='rejected').length;
+
+  const canDl = all.some(r=>r.status==='approved');
+  document.getElementById('nb-dl').className = 'nb' + (canDl ? '' : ' nd');
+
+  // Recent list
+  const rl = document.getElementById('req-list');
+  if(!all.length){
+    rl.innerHTML = '<div class="empty"><div style="font-size:34px">📭</div><div>No requests yet.</div></div>';
+  } else {
+    rl.innerHTML = all.slice().reverse().slice(0,6).map(r=>`
+      <div class="rr" onclick="viewReq('${r.id}')">
+        <div class="rr-dot ${r.status || 'pending'}"></div>
+        <div class="rr-i">
+          <div class="rr-t">${r.ptype}</div>
+          <div class="rr-m">${fmtDate(r.date)} · ${r.createdAt}</div>
+        </div>
+        <span class="bdg ${r.status || 'pending'}">${cap(r.status || 'pending')}</span>
+      </div>
+    `).join('');
+  }
+
+  // Progress
+  const act = getActive();
+  const pc = document.getElementById('prog-card');
+  if(act && act.authorities && act.authorities.length){
+    pc.style.display = '';
+    const tot = act.authorities.length;
+    const appr = act.authorities.filter(a=>a.status==='approved').length;
+    document.getElementById('prog-ptype').textContent = act.ptype;
+    document.getElementById('prog-cnt').textContent = appr+'/'+tot;
+    document.getElementById('prog-pf').style.width = Math.round(appr/tot*100)+'%';
+    document.getElementById('prog-tl').innerHTML = act.authorities.map((a,i)=>`
+      <div class="tl">
+        <div class="tln ${a.status}">${i+1}</div>
+        <div class="tla">${a.icon} ${a.name}</div>
+        <div class="tls ${a.status}">${a.status==='approved'?'✅ Approved':a.status==='rejected'?'❌ Rejected':'⏳ Pending'}</div>
+      </div>
+    `).join('');
+  } else {
+    pc.style.display = 'none';
+  }
+}
+
+function viewReq(id){
+  ACTIVE_ID = id; saveReqs();
+  fillTrack();
+  startPolling();
+  go('pg-track');
+}
+function goTrack(){
+  const a = getActive();
+  if(!a || !a.authorities || !a.authorities.length){ toast('No active request to track','info'); return; }
+  fillTrack();
+  startPolling();
+  go('pg-track');
+}
+function goDownload(){
+  stopPolling();
+  const a = REQS.find(r=>r.status==='approved');
+  if(!a){ toast('No approved request yet','err'); return; }
+  ACTIVE_ID = a.id; saveReqs(); buildSlip(); go('pg-slip');
+}
+function signOut(){
+  stopSSE();
+  if(!confirm('Sign out? Your data is saved.')) return;
+  localStorage.removeItem('das3_lastuser');
+  USER = null;
+  go('pg-welcome');
+}
+
+// ─── PAGE 5 — NEW REQUEST ────────────────────────────
+function openNewReq(){
+  SEL_AUTHS = [];
+  buildAuthGrid();
+  renderLetter();
+  document.getElementById('nr-pt').value = '';
+  document.getElementById('nr-dt').value = new Date().toISOString().split('T')[0];
+  document.getElementById('nr-ot').value = '';
+  document.getElementById('nr-it').value = '';
+  document.getElementById('nr-reason').value = '';
+  document.getElementById('email-sec').style.display = 'none';
+  document.getElementById('email-rows').innerHTML = '';
+  go('pg-newreq');
+}
+
+function buildAuthGrid(){
+  const cats = [...new Set(AUTHS.map(a=>a.cat))];
+  let html = '';
+  cats.forEach(cat => {
+    html += `<div class="ac-t">🏷️ ${cat}</div>`;
+    AUTHS.filter(a=>a.cat===cat).forEach(a=>{
+      html += `
+        <div class="ap" id="ap-${a.id}" onclick="toggleAuth('${a.id}')">
+          <span class="ap-em">${a.icon}</span>
+          <span class="ap-lbl">${a.name}<br/><span class="ap-cat">${a.cat}</span></span>
+          <span class="ap-cb">✓</span>
+        </div>`;
+    });
+  });
+  document.getElementById('auth-grid').innerHTML = html;
+}
+
+function toggleAuth(id){
+  const el = document.getElementById('ap-'+id);
+  if(SEL_AUTHS.includes(id)){
+    SEL_AUTHS = SEL_AUTHS.filter(x=>x!==id);
+    el.classList.remove('sel');
+  } else {
+    SEL_AUTHS.push(id);
+    el.classList.add('sel');
+  }
+  renderEmailRows();
+  renderLetter();
+}
+
+function renderEmailRows(){
+  const sec = document.getElementById('email-sec');
+  const rows = document.getElementById('email-rows');
+  if(!SEL_AUTHS.length){ sec.style.display='none'; rows.innerHTML=''; return; }
+  sec.style.display = '';
+  const existing = {};
+  document.querySelectorAll('.er-em').forEach(el=>{ existing[el.dataset.id]=el.value; });
+  rows.innerHTML = SEL_AUTHS.map(id=>{
+    const a = AUTHS.find(x=>x.id===id);
+    return `
+      <div class="er-row">
+        <span class="er-ic">${a.icon}</span>
+        <span class="er-nm">${a.name}</span>
+        <input type="email" class="er-em" data-id="${id}" id="em-${id}"
+          placeholder="Email ID for ${a.name}" value="${existing[id]||''}"/>
+      </div>`;
+  }).join('');
+}
+
+function renderLetter(){
+  const u = USER; if(!u) return;
+  const pt  = document.getElementById('nr-pt').value;
+  const dt  = document.getElementById('nr-dt').value;
+  const ot  = document.getElementById('nr-ot').value;
+  const it  = document.getElementById('nr-it').value;
+
+  document.getElementById('lp-inst').textContent = u.inst || '—';
+  document.getElementById('lp-date').textContent = 'Date: ' + fmtDate(dt);
+
+  const fromRows = [
+    ['Name', u.name],
+    ...(u.role==='student' ? [['Reg No', u.regno], ['Year', u.year]] : []),
+    ['Department', u.dept],
+    ['Mobile', u.mobile],
+  ];
+  document.getElementById('lp-from').innerHTML = fromRows.map(([l,v])=>
+    `<div class="l-fr"><span class="l-fl">${l}:</span><span class="l-fv">${v||'—'}</span></div>`
+  ).join('');
+
+  const toNames = SEL_AUTHS.map(id=>{ const a=AUTHS.find(x=>x.id===id); return a?a.name:''; });
+  document.getElementById('lp-to').innerHTML =
+    'To,<br/>' + (toNames.length ? toNames.map(n=>'<strong>'+n+'</strong>').join('<br/>')+'<br/>'+u.inst : '—');
+
+  document.getElementById('lp-sub').textContent    = pt || '—';
+  document.getElementById('lp-name').textContent   = u.name;
+  document.getElementById('lp-reg').textContent    = u.role==='student' ? ` (Reg: ${u.regno}, ${u.year})` : '';
+  document.getElementById('lp-dept').textContent   = u.dept;
+  document.getElementById('lp-pt').textContent     = pt || '—';
+  document.getElementById('lp-sig-n').textContent  = u.name;
+  document.getElementById('lp-sig-d').textContent  = u.dept + (u.role==='student'?' · '+u.regno+' · '+u.year:'');
+  document.getElementById('lp-sig-m').textContent  = u.mobile;
+
+  const tp = document.getElementById('lp-time');
+  if(ot||it){
+    tp.style.display='';
+    document.getElementById('lp-ot').textContent = fmtTime(ot);
+    document.getElementById('lp-it').textContent = fmtTime(it);
+  } else { tp.style.display='none'; }
+
+  const apprW = document.getElementById('lp-appr');
+  const apprR = document.getElementById('lp-appr-row');
+  if(SEL_AUTHS.length){
+    apprW.style.display='';
+    apprR.innerHTML = SEL_AUTHS.map(id=>{
+      const a=AUTHS.find(x=>x.id===id);
+      return `<div class="ac"><div class="ac-nm">${a.name}</div><div class="ac-sign"></div><span class="ac-st pending">⏳ Pending</span></div>`;
+    }).join('');
+  } else { apprW.style.display='none'; }
+}
+
+async function submitRequest(){
+  const pt     = document.getElementById('nr-pt').value;
+  const dt     = document.getElementById('nr-dt').value;
+  const ot     = document.getElementById('nr-ot').value;
+  const it     = document.getElementById('nr-it').value;
+  const reason = document.getElementById('nr-reason').value.trim();
+
+  if(!pt)     { toast('Please select Permission Type','err'); return; }
+  if(!dt)     { toast('Please select a Date','err'); return; }
+  if(!reason) { toast('Please write your reason in the letter','err'); document.getElementById('nr-reason').focus(); return; }
+  if(!SEL_AUTHS.length){ toast('Please select at least one authority','err'); return; }
+
+  const authorities = [];
+  for(const id of SEL_AUTHS){
+    const a = AUTHS.find(x=>x.id===id);
+    const emailEl = document.getElementById('em-'+id);
+    const email = emailEl ? emailEl.value.trim() : '';
+    if(!email || !email.includes('@')){ toast('Please enter a valid email for '+a.name,'err'); return; }
+    authorities.push({ id:a.id, name:a.name, icon:a.icon, email, status:'pending' });
+  }
+
+  const req = {
+    id: uid(),
+    inst:USER.inst, name:USER.name, dept:USER.dept,
+    regno:USER.regno, year:USER.year, mobile:USER.mobile, role:USER.role,
+    ptype:pt, date:dt, outT:ot, inT:it, reason,
+    authorities,
+    status:'pending',
+    createdAt: new Date().toLocaleString(),
+  };
+  
+  // Set as active BEFORE saving
+  ACTIVE_ID = req.id;
+  REQS.push(req);
+  saveReqs();
+
+  loader(true, `Sending to ${authorities.length} authorit${authorities.length>1?'ies':'y'}...`);
+
+  const backendOK = await checkBackend();
+  if(!backendOK){
+    loader(false);
+    toast('⚠️ Backend not running. Start server.js first!','err');
+    return;
+  }
+
+  try {
+    document.getElementById('loader-txt').textContent = 'Submitting & sending emails...';
+    const response = await fetch(`${getB()}/api/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ request: req }),
+    });
+    const result = await response.json();
+    
+    if(!result.success){
+      loader(false);
+      toast('Submission failed: ' + (result.error || 'Unknown error'), 'err');
+      return;
+    }
+    
+    // Update request ID from backend
+    if(result.requestId){
+      const backendRequestId = result.requestId;
+      console.log('✅ Backend created request:', backendRequestId);
+      
+      // Replace local request with backend request ID
+      const localIdx = REQS.findIndex(r => r.id === req.id);
+      if(localIdx >= 0){
+        REQS[localIdx].id = backendRequestId;
+        REQS[localIdx].status = 'pending';
+      }
+      ACTIVE_ID = backendRequestId;
+      req.id = backendRequestId;
+      
+      // Save updated requests before reload
+      saveReqs();
+      
+      // Immediately reload from backend to get fresh data
+      await loadReqs(USER);
+      saveReqs();
+    }
+    
+    loader(false);
+    if(result.demo){
+      toast(`Demo mode — configure EmailJS in the form to send real emails`, 'info');
+    } else {
+      const sentCount = (result.results||[]).filter(r=>r.success).length;
+      if(sentCount === result.results.length){
+        toast(`✅ ${sentCount} email(s) sent successfully!`, 'ok');
+      } else {
+        toast(`${sentCount}/${result.results.length} emails sent. Check EmailJS config.`, 'info');
+      }
+    }
+  } catch(e){
+    loader(false);
+    console.error('Submit error:', e);
+    toast('Submit failed — is server.js running?','err');
+    return;
+  }
+
+  refreshDash();
+  fillTrack();
+  startPolling(ACTIVE_ID);
+  go('pg-track');
+}
+
+// ─── PAGE 6 — TRACK ──────────────────────────────────
+function fillTrack(){
+  const req = getActive();
+  if(!req || !req.authorities || !req.authorities.length){
+    document.getElementById('tr-tbody').innerHTML =
+      '<tr><td colspan="5" style="text-align:center;padding:28px;color:var(--ink4)">No active request.</td></tr>';
+    return;
+  }
+  const tot  = req.authorities.length;
+  const appr = req.authorities.filter(a=>a.status==='approved').length;
+  const rej  = req.authorities.some(a=>a.status==='rejected');
+  const pct  = Math.round(appr/tot*100);
+
+  document.getElementById('tr-pf').style.width = pct+'%';
+  document.getElementById('tr-pl').textContent = `${appr} / ${tot} Approved`;
+
+  let fin = 'pending';
+  if(rej) fin='rejected';
+  else if(appr===tot) fin='approved';
+  patchActive({status:fin});
+
+  const b = document.getElementById('tr-badge');
+  b.className = 'tr-badge ' + fin;
+  b.textContent = fin==='approved'?'✅ Fully Approved':fin==='rejected'?'❌ Rejected':'⏳ Pending';
+
+  document.getElementById('tr-tbody').innerHTML = req.authorities.map((a,i)=>`
+    <tr>
+      <td style="font-weight:600;color:var(--ink4)">${i+1}</td>
+      <td>${a.icon} ${a.name}</td>
+      <td style="font-size:12px;color:var(--ink3)">${a.email}</td>
+      <td><span class="bdg ${a.status || 'pending'}">${cap(a.status || 'pending')}</span></td>
+      <td>${(a.status || 'pending')==='pending'
+        ? `<button onclick="resend('${a.id}')" style="padding:5px 11px;background:var(--blue-lt);color:var(--blue);border:1px solid var(--blue-mid);border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif">📧 Resend</button>`
+        : '<span style="color:var(--ink4);font-size:12px">—</span>'
+      }</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('appr-banner').className = 'appr-banner' + (fin==='approved'?' show':'');
+  refreshDash();
+}
+
+async function resend(authId){
+  const req = getActive(); if(!req) return;
+  const auth = req.authorities.find(a=>a.id===authId); if(!auth) return;
+  loader(true,'Resending to '+auth.name+'...');
+  try {
+    const r = await fetch(`${getB()}/api/resend`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ requestId: req.id, authId }),
+    });
+    const result = await r.json();
+    loader(false);
+    if(result.ok){ toast('Email resent to '+auth.name, 'ok'); }
+    else { toast('Resend failed: '+(result.error||'check EmailJS config'), 'err'); }
+  } catch(e){ loader(false); toast('Backend not reachable','err'); }
+}
+
+// ─── PAGE 7 — SLIP ───────────────────────────────────
+function buildSlip(){
+  const req = getActive() || REQS.find(r=>r.status==='approved');
+  if(!req) return;
+  document.getElementById('slip-inst').textContent = req.inst;
+  const meta = [
+    ['Name',req.name], ['Department',req.dept],
+    ...(req.role==='student'?[['Register No',req.regno],['Year',req.year]]:[]),
+    ['Permission',req.ptype], ['Date',fmtDate(req.date)],
+    ...((req.outT||req.inT)?[['Timing',fmtTime(req.outT)+' → '+fmtTime(req.inT)]]:[]),
+    ['Mobile',req.mobile], ['Submitted',req.createdAt],
+  ];
+  document.getElementById('slip-meta').innerHTML = meta.map(([l,v])=>
+    `<div class="sm"><span class="sml">${l}</span><span class="smv">${v||'—'}</span></div>`
+  ).join('');
+  document.getElementById('slip-reason').textContent = req.reason || '—';
+  document.getElementById('slip-appr').innerHTML = req.authorities.map(a=>`
+    <div class="sac">
+      <div class="sac-n">${a.name}</div>
+      <div class="sac-tk">✅</div>
+      <div class="sac-l">Approved</div>
+    </div>
+  `).join('');
+  document.getElementById('slip-gen').textContent = new Date().toLocaleString();
+  document.getElementById('slip-id').textContent = 'ID: ' + req.id;
+}
+
+// ─── PAGE 8 — AUTHORITY ACTION ───────────────────────
+async function handleAction(){
+  const p = new URLSearchParams(window.location.search);
+  const raw = p.get('act');
+  if(!raw) return false;
+  try {
+    const d = JSON.parse(atob(decodeURIComponent(raw)));
+    window._act = { reqId:d.r, authId:d.a, action:d.v };
+
+    // First try to find in localStorage
+    let foundReq=null, foundAuth=null;
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(!k.startsWith('das3_') || k==='das3_ejs' || k==='das3_lastuser') continue;
+      let ud; try{ ud=JSON.parse(localStorage.getItem(k)||'{}'); }catch(e){continue;}
+      if(!ud.reqs) continue;
+      const ri = ud.reqs.findIndex(x=>x.id===d.r);
+      if(ri<0) continue;
+      foundReq = ud.reqs[ri];
+      foundAuth = foundReq.authorities.find(x=>x.id===d.a);
+      window._act.storageKey = k;
+      window._act.reqIndex = ri;
+      break;
+    }
+
+    // If not found locally, fetch from backend
+    if(!foundReq || !foundAuth){
+      try {
+        loader(true, 'Loading request details...');
+        const res = await fetch(`${getB()}/api/status/${d.r}`);
+        if(res.ok){
+          const data = await res.json();
+          foundReq = data.request;
+          foundAuth = foundReq.authorities.find(x=>x.id===d.a);
+          window._act.fromBackend = true;
+        }
+      } catch(e){
+        console.error('Failed to fetch from backend:', e);
+      } finally {
+        loader(false);
+      }
+    }
+
+    if(foundReq && foundAuth){
+      document.getElementById('act-title').textContent = foundReq.ptype + ' — Permission Request';
+      document.getElementById('act-sub').textContent = foundReq.name+' from '+foundReq.dept+' is requesting your approval.';
+      const rows=[
+        ['From', foundReq.name],
+        ['Institution', foundReq.inst],
+        ['Department', foundReq.dept],
+        ...(foundReq.role==='student'?[['Reg / Year', foundReq.regno+' / '+foundReq.year]]:[]),
+        ['Permission Type', foundReq.ptype],
+        ['Date', fmtDate(foundReq.date)],
+        ['Reason', foundReq.reason],
+      ];
+      document.getElementById('act-det').innerHTML = rows.map(([l,v])=>
+        `<div class="adr"><span class="adrl">${l}</span><span class="adrv">${v||'—'}</span></div>`
+      ).join('');
+      if(foundAuth.status !== 'pending') showActDone(foundAuth.status);
+    } else {
+      document.getElementById('act-det').innerHTML =
+        '<p style="color:var(--ink4);font-size:13px;padding:8px">Request details not found.<br/>The request may have been deleted or the link is invalid.</p>';
+    }
+    go('pg-action');
+    return true;
+  } catch(e){ console.error(e); return false; }
+}
+
+function doAct(action){
+  const { reqId, authId, storageKey, reqIndex, fromBackend } = window._act || {};
+  if(!reqId || !authId){ toast('Invalid action link','err'); return; }
+
+  loader(true, 'Processing your response...');
+
+  // If we have localStorage data, update it
+  if(storageKey && reqIndex !== undefined && !fromBackend){
+    let updated = false;
+    let ud; try{ ud=JSON.parse(localStorage.getItem(storageKey)||'{}'); }catch(e){return;}
+    if(ud.reqs && ud.reqs[reqIndex]){
+      const ai = ud.reqs[reqIndex].authorities.findIndex(x=>x.id===authId);
+      if(ai>=0){
+        ud.reqs[reqIndex].authorities[ai].status = action;
+        const auths = ud.reqs[reqIndex].authorities;
+        const tot   = auths.length;
+        const appr  = auths.filter(a=>a.status==='approved').length;
+        const rej   = auths.some(a=>a.status==='rejected');
+        ud.reqs[reqIndex].status = rej?'rejected':appr===tot?'approved':'pending';
+        localStorage.setItem(storageKey, JSON.stringify(ud));
+        updated = true;
+      }
+    }
+    if(!updated) console.log('[LOCAL] Action update failed:', action, 'reqId:', reqId, 'authId:', authId);
+  }
+
+  // Always update backend
+  fetch(`${getB()}/api/action/${reqId}/${authId}/${action}`, {
+    method: 'GET'
+  })
+  .then(res => {
+    if(res.ok){
+      console.log('✅ Backend response:', res.status);
+      // If we have local user data, refresh it
+      if(USER && !fromBackend) {
+        loadReqs(USER).then(() => {
+          refreshDash();
+          fillTrack();
+        });
+      }
+    } else {
+      console.error('Backend update failed:', res.status);
+      toast('Failed to update status on server', 'err');
+    }
+  })
+  .catch(e => {
+    console.error('Backend update error:', e);
+    toast('Network error - please check your connection', 'err');
+  })
+  .finally(() => {
+    loader(false);
+    showActDone(action);
+  });
+}
+
+function showActDone(status){
+  document.getElementById('act-pend').style.display='none';
+  const done = document.getElementById('act-done');
+  done.style.display='flex';
+  document.getElementById('act-done-ic').textContent = status==='approved'?'✅':'❌';
+  document.getElementById('act-done-t').textContent  = status==='approved'?'Approved!':'Rejected';
+  document.getElementById('act-done-s').textContent  = status==='approved'
+    ? 'Your approval has been recorded. The applicant can now see the updated status.'
+    : 'You have rejected this request. The applicant will see the updated status.';
+}
+
+// ─── VISIBILITY SYNC ─────────────────────────────────
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && USER){
+    loadReqs(USER);
+    refreshDash();
+    const active = getActive();
+    if(active && document.getElementById('pg-track').classList.contains('active')){
+      fillTrack();
+      startPolling();
+    }
+  }
+});
+
+// ─── INIT ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async ()=>{
+  loadEJS();
+  setInterval(tick, 30000);
+
+  // Check for action parameter first
+  if(await handleAction()) return;
+
+  // Restore last session
+  try {
+    const lu = JSON.parse(localStorage.getItem('das3_lastuser') || 'null');
+    if(lu && lu.mobile){
+      USER = lu;
+      loadReqs(lu);
+      buildDash();
+      go('pg-dash');
+      // Auto-start polling for updates
+      startPolling();
+      return;
+    }
+  } catch(e){}
+
+  go('pg-welcome');
+});
+</script>
+</body>
+</html>
