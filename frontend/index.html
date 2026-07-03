@@ -553,7 +553,7 @@ table.t tbody tr:hover td{background:#f8fafc}
         </div>
       </div>
 
-      <button class="btn btn-p btn-w" onclick="submitRequest()">📧 Submit & Send to Authorities</button>
+      <button id="nr-submit-btn" class="btn btn-p btn-w" onclick="submitRequest()">📧 Submit & Send to Authorities</button>
     </div>
   </div>
 </div>
@@ -728,12 +728,12 @@ function go(id){
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
 }
-function toast(msg, type='info'){
+function toast(msg, type='info', duration=3000){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = type + ' show';
   clearTimeout(t._t);
-  t._t = setTimeout(()=>{ t.className=''; }, 3000);
+  t._t = setTimeout(()=>{ t.className=''; }, duration);
 }
 function loader(on, msg='Please wait...'){
   const txtEl = document.getElementById('loader-txt');
@@ -774,7 +774,10 @@ function tick(){
 
 // Fallback if config.js didn't load
 if (!window.BACKEND_URL) {
-  window.BACKEND_URL = window.location.hostname === 'localhost' 
+  const localHosts = ['localhost', '127.0.0.1'];
+  const localNetwork = /^(10|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./;
+  const hostname = window.location.hostname;
+  window.BACKEND_URL = localHosts.includes(hostname) || localNetwork.test(hostname)
     ? 'http://localhost:3000'
     : 'https://digital-approval-api.onrender.com';
   console.warn('[Warning] config.js not loaded, using default:', window.BACKEND_URL);
@@ -1155,16 +1158,19 @@ function renderLetter(){
 }
 
 async function submitRequest(){
+  const submitButton = document.getElementById('nr-submit-btn');
+  if(submitButton) submitButton.disabled = true;
+
   const pt     = document.getElementById('nr-pt').value;
   const dt     = document.getElementById('nr-dt').value;
   const ot     = document.getElementById('nr-ot').value;
   const it     = document.getElementById('nr-it').value;
   const reason = document.getElementById('nr-reason').value.trim();
 
-  if(!pt)     { toast('Please select Permission Type','err'); return; }
-  if(!dt)     { toast('Please select a Date','err'); return; }
-  if(!reason) { toast('Please write your reason in the letter','err'); document.getElementById('nr-reason').focus(); return; }
-  if(!SEL_AUTHS.length){ toast('Please select at least one authority','err'); return; }
+  if(!pt)     { toast('Please select Permission Type','err'); if(submitButton) submitButton.disabled = false; return; }
+  if(!dt)     { toast('Please select a Date','err'); if(submitButton) submitButton.disabled = false; return; }
+  if(!reason) { toast('Please write your reason in the letter','err'); document.getElementById('nr-reason').focus(); if(submitButton) submitButton.disabled = false; return; }
+  if(!SEL_AUTHS.length){ toast('Please select at least one authority','err'); if(submitButton) submitButton.disabled = false; return; }
 
   const authorities = [];
   for(const id of SEL_AUTHS){
@@ -1201,16 +1207,25 @@ async function submitRequest(){
 
   try {
     document.getElementById('loader-txt').textContent = 'Submitting & sending emails...';
+    console.log('[Submit] Backend URL:', getB());
     const response = await fetch(`${getB()}/api/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ request: req }),
     });
-    const result = await response.json();
+    const text = await response.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (e) {
+      console.error('[Submit] Invalid JSON response:', text);
+      throw new Error('Invalid server response');
+    }
     
     if(!result.success){
       loader(false);
-      toast('Submission failed: ' + (result.error || 'Unknown error'), 'err');
+      console.error('[Submit] Error response:', result);
+      toast('Submission failed: ' + (result.error || result.message || 'Unknown error'), 'err');
       return;
     }
     
@@ -1236,28 +1251,36 @@ async function submitRequest(){
       saveReqs();
     }
     
-    loader(false);
+    const sentCount = (result.results||[]).filter(r=>r.success).length;
+    const redirectPage = 'pg-track';
+    const shouldRedirect = result.demo || sentCount > 0;
+
     if(result.demo){
-      toast(`Demo mode — configure EmailJS in the form to send real emails`, 'info');
+      toast(`Demo mode — configure EmailJS in the form to send real emails`, 'info', 5000);
+    } else if(sentCount === result.results.length){
+      toast(`✅ Email sent successfully!`, 'ok', 5000);
+    } else if(sentCount > 0){
+      toast(`✅ ${sentCount}/${result.results.length} email(s) sent. Check EmailJS config.`, 'info', 5000);
     } else {
-      const sentCount = (result.results||[]).filter(r=>r.success).length;
-      if(sentCount === result.results.length){
-        toast(`✅ ${sentCount} email(s) sent successfully!`, 'ok');
-      } else {
-        toast(`${sentCount}/${result.results.length} emails sent. Check EmailJS config.`, 'info');
-      }
+      toast(`❌ No emails were sent. Check EmailJS config.`, 'err', 5000);
+    }
+
+    if(shouldRedirect){
+      // Stay on the submission page for the toast, then go to tracking only.
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      refreshDash();
+      fillTrack();
+      go(redirectPage);
+      startPolling();
     }
   } catch(e){
-    loader(false);
     console.error('Submit error:', e);
     toast('Submit failed — is server.js running?','err');
     return;
+  } finally {
+    if(submitButton) submitButton.disabled = false;
+    loader(false);
   }
-
-  refreshDash();
-  fillTrack();
-  startPolling(ACTIVE_ID);
-  go('pg-track');
 }
 
 // ─── PAGE 6 — TRACK ──────────────────────────────────
@@ -1349,7 +1372,7 @@ function buildSlip(){
 // ─── PAGE 8 — AUTHORITY ACTION ───────────────────────
 async function handleAction(){
   const p = new URLSearchParams(window.location.search);
-  const raw = p.get('act');
+  const raw = p.get('act') || p.get('data');
   if(!raw) return false;
   try {
     const d = JSON.parse(atob(decodeURIComponent(raw)));
@@ -1378,8 +1401,8 @@ async function handleAction(){
         const res = await fetch(`${getB()}/api/status/${d.r}`);
         if(res.ok){
           const data = await res.json();
-          foundReq = data.request;
-          foundAuth = foundReq.authorities.find(x=>x.id===d.a);
+          foundReq = data.request || data;
+          foundAuth = foundReq && foundReq.authorities ? foundReq.authorities.find(x=>x.id===d.a) : null;
           window._act.fromBackend = true;
         }
       } catch(e){
@@ -1420,6 +1443,22 @@ function doAct(action){
 
   loader(true, 'Processing your response...');
 
+  const localReq = REQS.find(r => r.id === reqId);
+  if(localReq){
+    const ai = localReq.authorities.findIndex(a => a.id === authId);
+    if(ai >= 0){
+      localReq.authorities[ai].status = action;
+      const auths = localReq.authorities;
+      const tot = auths.length;
+      const appr = auths.filter(a => a.status === 'approved').length;
+      const rej = auths.some(a => a.status === 'rejected');
+      localReq.status = rej ? 'rejected' : appr === tot ? 'approved' : 'pending';
+      saveReqs();
+      refreshDash();
+      if(document.getElementById('pg-track').classList.contains('active')) fillTrack();
+    }
+  }
+
   // If we have localStorage data, update it
   if(storageKey && reqIndex !== undefined && !fromBackend){
     let updated = false;
@@ -1441,7 +1480,8 @@ function doAct(action){
   }
 
   // Always update backend
-  fetch(`${getB()}/api/action/${reqId}/${authId}/${action}`, {
+  const payload = encodeURIComponent(btoa(JSON.stringify({ r: reqId, a: authId, v: action })));
+  fetch(`${getB()}/api/action?data=${payload}`, {
     method: 'GET'
   })
   .then(res => {
@@ -1452,6 +1492,7 @@ function doAct(action){
         loadReqs(USER).then(() => {
           refreshDash();
           fillTrack();
+          startPolling();
         });
       }
     } else {
