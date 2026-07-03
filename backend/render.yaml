@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: digital-approval-backend
+    env: node
+    region: ohio
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: EMAILJS_SERVICE_ID
+      - key: EMAILJS_TEMPLATE_ID
+      - key: EMAILJS_PUBLIC_KEY
+      - key: EMAILJS_PRIVATE_KEY
+      - key: FRONTEND_URL
