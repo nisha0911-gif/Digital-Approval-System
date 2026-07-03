@@ -194,7 +194,10 @@ async function sendEmailToAuthority(req, authData, requestData, requestId, resen
       EMAILJS_TEMPLATE_ID,
       {
         email: authData.email,
+        to_email: authData.email,
         to_name: authData.name,
+        from_email: EMAILJS_USER_EMAIL,
+        reply_to: EMAILJS_USER_EMAIL,
         student_name: requestData.name,
         student_regno: requestData.regno || 'N/A',
         student_dept: requestData.dept,
