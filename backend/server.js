@@ -814,6 +814,10 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+app.get('/', (req, res) => {
+  res.send('Digital Approval System Backend is Running!');
+});
+
 app.listen(PORT, () => {
   console.log(`\n🚀 Digital Approval System Backend v2.2 (Real Email Integration)`);
   console.log(`📍 Server: http://localhost:${PORT}`);
