@@ -9,8 +9,11 @@
  */
 
 // Detect environment and set backend URL
-if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-  // Local development
+const localHosts = ['localhost', '127.0.0.1', ''];
+const localNetwork = /^(10|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\./;
+const hostname = window.location.hostname || '';
+if (localHosts.includes(hostname) || localNetwork.test(hostname)) {
+  // Local development or LAN access
   window.BACKEND_URL = 'http://localhost:3000';
 } else {
   // Production - CHANGE THIS to your actual Render backend URL

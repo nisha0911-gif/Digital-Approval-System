@@ -1,6 +1,7 @@
 const express = require('express');
 const emailjs = require('@emailjs/nodejs');
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 const os = require('os');
 require('dotenv').config();
@@ -43,6 +44,17 @@ function getLocalNetworkAddress() {
   return null;
 }
 
+function getRequestBaseUrl(req) {
+  if (req && req.get) {
+    const host = req.get('host');
+    const proto = req.get('x-forwarded-proto') || req.protocol || 'http';
+    if (host) {
+      return `${proto}://${host}`;
+    }
+  }
+  return SERVER_URL;
+}
+
 const PORT = process.env.PORT || 3000;
 const LOCAL_SERVER_URL = (() => {
   const localIp = getLocalNetworkAddress();
@@ -54,18 +66,53 @@ const LOCAL_SERVER_URL = (() => {
 const SERVER_URL = process.env.SERVER_URL && !process.env.SERVER_URL.includes('ngrok')
   ? process.env.SERVER_URL
   : LOCAL_SERVER_URL;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 if (process.env.SERVER_URL && process.env.SERVER_URL.includes('ngrok')) {
   console.log('⚠️ Ignoring ngrok SERVER_URL to keep links local-network only');
 }
-console.log(`🌐 Server URL for email links: ${SERVER_URL}`);
+console.log(`🌐 Server URL for API requests: ${SERVER_URL}`);
+console.log(`🌐 Frontend URL for email links: ${FRONTEND_URL}`);
 
 // Mock Firebase implementation for demo purposes
 class MockFirestore {
   constructor() {
+    this.dataDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(this.dataDir)) {
+      fs.mkdirSync(this.dataDir, { recursive: true });
+    }
+
     this.data = {
-      users: new Map(),
-      requests: new Map()
+      users: new Map(this.loadCollection('users')),
+      requests: new Map(this.loadCollection('requests'))
     };
+  }
+
+  loadCollection(name) {
+    const filePath = path.join(this.dataDir, `${name}.json`);
+    if (!fs.existsSync(filePath)) return [];
+    try {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      const parsed = raw ? JSON.parse(raw) : {};
+      return Object.entries(parsed).map(([id, data]) => [id, data]);
+    } catch (err) {
+      console.error(`Failed to load ${name} persistence:`, err);
+      return [];
+    }
+  }
+
+  persistCollection(name) {
+    const filePath = path.join(this.dataDir, `${name}.json`);
+    const collection = this.data[name];
+    if (!collection) return;
+    const obj = {};
+    for (const [id, doc] of collection.entries()) {
+      obj[id] = doc;
+    }
+    try {
+      fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf8');
+    } catch (err) {
+      console.error(`Failed to persist ${name}:`, err);
+    }
   }
 
   collection(name) {
@@ -82,17 +129,20 @@ class MockFirestore {
         },
         set: async (data) => {
           self.data[name].set(id, { ...data, id });
+          self.persistCollection(name);
         },
         update: async (updates) => {
           const existing = self.data[name].get(id);
           if (existing) {
             self.data[name].set(id, { ...existing, ...updates });
+            self.persistCollection(name);
           }
         }
       }),
       add: async (data) => {
         const id = Date.now().toString() + Math.random().toString(36).substr(2, 9);
         self.data[name].set(id, { ...data, id });
+        self.persistCollection(name);
         return { id };
       },
       get: async () => {
@@ -197,14 +247,17 @@ function generateRequestId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function sendEmailToAuthority(req, authData, requestData, requestId, resend = false) {
   if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY) {
     console.warn(`⚠️ EmailJS not configured - cannot send to ${authData.email}`);
     return { email: authData.email, success: false, error: 'EmailJS is not configured' };
   }
 
-  // Use configured SERVER_URL for email links (works across network)
-  const baseUrl = SERVER_URL;
+  const baseUrl = getRequestBaseUrl(req) || SERVER_URL;
   const approveLink = `${baseUrl}/api/action?data=${encodeURIComponent(Buffer.from(JSON.stringify({ r: requestId, a: authData.id, v: 'approved' })).toString('base64'))}`;
   const rejectLink = `${baseUrl}/api/action?data=${encodeURIComponent(Buffer.from(JSON.stringify({ r: requestId, a: authData.id, v: 'rejected' })).toString('base64'))}`;
   const letterHTML = generateLetterHTML(requestData, authData);
@@ -212,64 +265,77 @@ async function sendEmailToAuthority(req, authData, requestData, requestId, resen
   console.log(`📧 Preparing email for ${authData.name} <${authData.email}>`);
   console.log(`   Request ID: ${requestId}, Authority ID: ${authData.id}`);
   console.log(`   Links will use: ${baseUrl}`);
+  console.log(`   approveLink: ${approveLink}`);
+  console.log(`   rejectLink: ${rejectLink}`);
 
-  try {
-    const emailResult = await emailjs.send(
-      EMAILJS_SERVICE_ID,
-      EMAILJS_TEMPLATE_ID,
-      {
-        email: authData.email,
-        to_email: authData.email,
-        to_name: authData.name,
-        from_email: EMAILJS_USER_EMAIL,
-        reply_to: EMAILJS_USER_EMAIL,
-        student_name: requestData.name,
-        student_regno: requestData.regno || 'N/A',
-        student_dept: requestData.dept,
-        student_year: requestData.year || 'N/A',
-        student_mobile: requestData.mobile,
-        student_role: requestData.role,
-        institution: requestData.inst,
-        permission_type: requestData.ptype,
-        request_date: requestData.date,
-        out_time: requestData.outT || 'N/A',
-        in_time: requestData.inT || 'N/A',
-        reason: requestData.reason,
-        request_id: requestId,
-        approve_link: approveLink,
-        reject_link: rejectLink,
-        letter_html: letterHTML,
-        current_date: new Date().toLocaleDateString(),
-        current_time: new Date().toLocaleTimeString()
-      },
-      {
-        publicKey: EMAILJS_PUBLIC_KEY,
-        ...(EMAILJS_PRIVATE_KEY ? { privateKey: EMAILJS_PRIVATE_KEY } : {})
+  const maxAttempts = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const emailResult = await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        {
+          email: authData.email,
+          to_email: authData.email,
+          to_name: authData.name,
+          from_email: EMAILJS_USER_EMAIL,
+          reply_to: EMAILJS_USER_EMAIL,
+          student_name: requestData.name,
+          student_regno: requestData.regno || 'N/A',
+          student_dept: requestData.dept,
+          student_year: requestData.year || 'N/A',
+          student_mobile: requestData.mobile,
+          student_role: requestData.role,
+          institution: requestData.inst,
+          permission_type: requestData.ptype,
+          request_date: requestData.date,
+          out_time: requestData.outT || 'N/A',
+          in_time: requestData.inT || 'N/A',
+          reason: requestData.reason,
+          request_id: requestId,
+          approve_link: approveLink,
+          reject_link: rejectLink,
+          letter_html: letterHTML,
+          current_date: new Date().toLocaleDateString(),
+          current_time: new Date().toLocaleTimeString()
+        },
+        {
+          publicKey: EMAILJS_PUBLIC_KEY,
+          ...(EMAILJS_PRIVATE_KEY ? { privateKey: EMAILJS_PRIVATE_KEY } : {})
+        }
+      );
+
+      const sentEmail = {
+        id: Date.now() + Math.random(),
+        to: authData.email,
+        subject: `Permission Request: ${requestData.ptype} - ${requestData.name}`,
+        sentAt: new Date().toISOString(),
+        requestId,
+        authorityId: authData.id,
+        authorityName: authData.name,
+        emailjsId: emailResult && emailResult.text ? emailResult.text : null,
+        resend
+      };
+
+      sentEmails.push(sentEmail);
+      console.log(`✅ Email successfully sent to ${authData.email}`);
+      return { email: authData.email, success: true, emailjsId: sentEmail.emailjsId };
+    } catch (emailError) {
+      lastError = emailError;
+      const errorMessage = emailError && typeof emailError === 'object'
+        ? (emailError.message || JSON.stringify(emailError))
+        : String(emailError);
+      console.warn(`⚠️ Email attempt ${attempt}/${maxAttempts} failed for ${authData.email}: ${errorMessage}`);
+      if (attempt < maxAttempts) {
+        await delay(1500 * attempt);
       }
-    );
-
-    const sentEmail = {
-      id: Date.now() + Math.random(),
-      to: authData.email,
-      subject: `Permission Request: ${requestData.ptype} - ${requestData.name}`,
-      sentAt: new Date().toISOString(),
-      requestId,
-      authorityId: authData.id,
-      authorityName: authData.name,
-      emailjsId: emailResult && emailResult.text ? emailResult.text : null,
-      resend
-    };
-
-    sentEmails.push(sentEmail);
-    console.log(`✅ Email successfully sent to ${authData.email}`);
-    return { email: authData.email, success: true, emailjsId: sentEmail.emailjsId };
-  } catch (emailError) {
-    console.error(`❌ Email sending failed for ${authData.email}:`, emailError);
-    const errorMessage = emailError && typeof emailError === 'object'
-      ? (emailError.message || JSON.stringify(emailError))
-      : String(emailError);
-    return { email: authData.email, success: false, error: errorMessage };
+    }
   }
+
+  console.error(`❌ Email sending failed for ${authData.email}:`, lastError);
+  return { email: authData.email, success: false, error: lastError ? (lastError.message || JSON.stringify(lastError)) : 'Unknown email error' };
 }
 
 app.post('/api/update-status', async (req, res) => {
@@ -398,15 +464,17 @@ app.get('/api/action', async (req, res) => {
     }
 
     const icon = action === 'approved' ? '✅' : '❌';
-    const title = action === 'approved' ? 'Approved' : 'Rejected';
+    const title = action === 'approved' ? 'Application Approved' : 'Application Rejected';
     res.send(`
       <html>
       <head>
-        <title>Action Recorded</title>
+        <title>${title}</title>
         <style>
           body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f0f4ff; }
           h1 { color: #2563eb; }
           p { color: #475569; }
+          a { color: #2563eb; text-decoration: none; font-weight: 600; }
+          a:hover { text-decoration: underline; }
         </style>
       </head>
       <body>
@@ -414,6 +482,20 @@ app.get('/api/action', async (req, res) => {
         <p>Your response has been recorded successfully.</p>
         <p>Request ID: ${requestId}</p>
         <p>You can close this window.</p>
+        <p><a href="/">Back to App</a></p>
+        <script>
+          try {
+            const payload = {
+              reqId: ${JSON.stringify(requestId)},
+              status: ${JSON.stringify(action)},
+              updatedAt: new Date().toISOString()
+            };
+            localStorage.setItem('das3_action', JSON.stringify(payload));
+            setTimeout(() => localStorage.removeItem('das3_action'), 1000);
+          } catch (e) {
+            console.error('Storage event failed', e);
+          }
+        </script>
       </body>
       </html>
     `);
@@ -482,12 +564,13 @@ app.post('/api/submit', async (req, res) => {
     console.log(`✅ Request created with ID: ${requestId}`);
 
     console.log(`📧 Sending emails to authorities...`);
-    const results = await Promise.all(requestData.authorities.map(async (auth) => {
+    const results = [];
+    for (const auth of requestData.authorities) {
       const defaultAuth = AUTHS.find(x => x.id === auth.id) || {};
       const authData = { ...defaultAuth, ...auth };
       console.log(`  → Sending to ${authData.email} (${authData.name})`);
-      return sendEmailToAuthority(req, authData, requestData, requestId);
-    }));
+      results.push(await sendEmailToAuthority(req, authData, requestData, requestId));
+    }
 
     const sentCount = results.filter(r => r.success).length;
     const failedEmails = results.filter(r => !r.success);
@@ -628,6 +711,7 @@ app.get('/api/status/:reqId', async (req, res) => {
     const pendingCount = request.authorities.filter(a => a.status === 'pending').length;
 
     res.json({
+      request,
       ...request,
       progress: {
         total: totalAuthorities,
@@ -730,7 +814,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(PORT, 'localhost', () => {
+app.listen(PORT, () => {
   console.log(`\n🚀 Digital Approval System Backend v2.2 (Real Email Integration)`);
   console.log(`📍 Server: http://localhost:${PORT}`);
   console.log(`🌐 Public link base: ${SERVER_URL}`);
